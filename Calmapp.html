@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calma · demo con alma</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<style>
+:root{
+  --bg:#f1eff5;--surface:#fff;--ink:#241c33;--mute:#6d6580;--line:#ddd7e8;
+  --acc:#6b3fa0;--acc-ink:#fff;--ok:#2f7d5b;--warn:#b4561b;--bad:#b3263e;
+  --gold:#b8860b;--soft:#f7f4fb;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17121f;--surface:#231b30;--ink:#efeaf7;--mute:#a79dbb;--line:#3a2f4d;
+  --acc:#b794ec;--acc-ink:#17121f;--ok:#6fcfa0;--warn:#f0a066;--bad:#ff8aa0;
+  --gold:#e0b84a;--soft:#1d1729;
+}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif}
+#app{max-width:520px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);position:relative}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:10}
+h1{font-size:1.4rem;font-weight:800;margin:0;letter-spacing:-.02em}
+h1 span{color:var(--acc)}
+h2{font-size:1.1rem;margin:0 0 8px}
+h3{font-size:.95rem;margin:0 0 6px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+main{flex:1;overflow-y:auto;padding:16px;padding-bottom:80px}
+button{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 14px;min-height:44px;transition:transform .1s,background .15s}
+button:active{transform:scale(.97)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.primary{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+.ghost{background:transparent}
+.pill{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 12px;font-size:.85rem;min-height:0}
+nav{display:flex;border-top:1px solid var(--line);background:var(--surface);position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:10}
+nav button{flex:1;border:0;border-radius:0;background:none;color:var(--mute);min-height:58px;font-size:.8rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+nav button .ico{font-size:1.2rem}
+nav button[aria-current="page"]{color:var(--acc);font-weight:800;box-shadow:inset 0 3px 0 var(--acc)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
+.card.soft{background:var(--soft)}
+.avatar{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font-size:2rem;font-weight:800;color:#fff;margin-bottom:10px}
+.avatar.sm{width:44px;height:44px;font-size:1.2rem;margin:0;flex-shrink:0}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.tag{background:var(--bg);border-radius:8px;padding:3px 10px;font-size:.85rem}
+.limit{border-left:4px solid var(--acc);padding:8px 12px;background:var(--bg);border-radius:0 8px 8px 0;margin:12px 0;font-size:.92rem}
+.row{display:flex;gap:10px;margin-top:14px}.row>button{flex:1}
+.list button.item{display:flex;width:100%;gap:12px;align-items:center;text-align:left;margin-bottom:8px;padding:12px}
+.item .meta{flex:1;min-width:0}
+.item .meta b{display:block}
+.item .meta .preview{color:var(--mute);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat{display:flex;flex-direction:column;gap:8px;padding:8px 0}
+.msg{max-width:82%;padding:9px 13px;border-radius:16px;background:var(--surface);border:1px solid var(--line);white-space:pre-wrap;font-size:.95rem}
+.msg.me{align-self:flex-end;background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.msg.sys{align-self:center;max-width:94%;background:transparent;border:1px dashed var(--line);color:var(--mute);font-size:.88rem;text-align:center}
+.msg.sys.good{color:var(--ok);border-color:var(--ok)}
+.msg.sys.bad{color:var(--bad);border-color:var(--bad)}
+.msg .val{display:block;font-size:.75rem;opacity:.7;margin-top:4px}
+.compose{display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface);position:fixed;bottom:58px;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:9}
+.compose input{flex:1;font:inherit;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.f label{display:block;margin:10px 0 4px;font-weight:600;font-size:.9rem}
+.f input,.f textarea,.f select{width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.bar{height:14px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line);margin:8px 0}
+.bar i{display:block;height:100%;border-radius:99px;transition:width .4s}
+.badge{display:inline-block;margin:4px 6px 0 0;padding:4px 12px;border-radius:99px;border:1px solid var(--acc);color:var(--acc);font-size:.85rem}
+.badge.off{border-color:var(--line);color:var(--mute);border-style:dashed}
+.badge.gold{border-color:var(--gold);color:var(--gold)}
+#toast{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;max-width:90%;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20;font-size:.9rem}
+#toast.on{opacity:1}
+.muted{color:var(--mute)}
+.center{text-align:center}
+.mood{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--soft);border:1px solid var(--line);font-size:.85rem}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.stat{background:var(--soft);border-radius:12px;padding:12px;text-align:center}
+.stat b{display:block;font-size:1.4rem;color:var(--acc)}
+.stat span{font-size:.8rem;color:var(--mute)}
+.quest{display:flex;align-items:center;gap:10px;padding:10px;background:var(--soft);border-radius:12px;margin-bottom:8px}
+.quest .q-ico{font-size:1.4rem}
+.quest .q-body{flex:1}
+.quest .q-body b{display:block;font-size:.92rem}
+.quest .q-body span{font-size:.8rem;color:var(--mute)}
+.quest.done{opacity:.5}
+.quest.done .q-body b{text-decoration:line-through}
+.mem-item{display:flex;gap:8px;align-items:flex-start;padding:8px;background:var(--soft);border-radius:10px;margin-bottom:6px;font-size:.88rem}
+.mem-item .val{font-size:1.1rem;flex-shrink:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Calma<span>.</span></h1>
+    <button class="pill" id="karmaPill" onclick="go('perfil')" aria-label="Ver mi karma">Respeto <b>100</b></button>
+  </header>
+  <main id="view"></main>
+  <nav aria-label="Secciones">
+    <button data-v="descubrir" onclick="go('descubrir')"><span class="ico">🔍</span>Descubrir</button>
+    <button data-v="chats" onclick="go('chats')"><span class="ico">💬</span>Chats</button>
+    <button data-v="alma" onclick="go('alma')"><span class="ico">✨</span>Mi alma</button>
+    <button data-v="perfil" onclick="go('perfil')"><span class="ico">👤</span>Perfil</button>
+  </nav>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN — Reglas de la comunidad
+   ============================================================ */
+const CONFIG = {
+  karmaStart: 100,
+  tiers: [
+    {min:80, id:"normal", label:"Todo normal", color:"var(--ok)"},
+    {min:50, id:"limit", label:"Límite de 5 mensajes al día", color:"var(--warn)", dailyMsgs:5},
+    {min:20, id:"reply", label:"Solo puedes responder, no iniciar", color:"var(--warn)", noStart:true},
+    {min:0, id:"frozen", label:"Cuenta congelada: revisión manual", color:"var(--bad)", frozen:true}
+  ],
+  badWords: /\b(foto|fotos|nudes?|desnuda|desnudo|tetas|sexo|sexy|follar|follamos|cama|polla|frigid[ao]|zorra|puta)\b/i,
+  politeWords: /\b(gracias|vale|entiendo|perdona|perd[oó]n|respeto|sin problema|de acuerdo|con calma|tranqui)\b/i,
+  penalty: 15, reward: 3, thanks: 5, maxStrikes: 3
+};
+
+const TROLL = [
+  "Uy, alguien se equivocó de app. Aquí no. Vuelve cuando hayas leído el perfil.",
+  "No. Pero puedo enseñarte una foto de mi gato. ¿Te vale?",
+  "Modo aprendizaje activado: lee el perfil y vuelve a intentarlo.",
+  "Aquí no. Respira, bebe agua y reformula."
+];
+
+/* ============================================================
+   ESTADOS EMOCIONALES — Inspirado en bot.py
+   ============================================================ */
+const MOODS = {
+  sereno:     {emoji:"🌿", label:"Sereno",     desc:"Frases cortas, metáforas suaves, tono calmado."},
+  jugueton:   {emoji:"✨", label:"Juguetón",   desc:"Insinúas, provocas con elegancia, dobles sentidos."},
+  melancolico:{emoji:"🌧️", label:"Melancólico",desc:"Silencios, frases más largas, preguntas existenciales."},
+  cansado:    {emoji:"😴", label:"Cansado",    desc:"Respuestas mínimas, menos energía."},
+  neutro:     {emoji:"💬", label:"Neutro",     desc:"Respondes con naturalidad, sin extremos."},
+  enfadado:   {emoji:"🔥", label:"Enfadado",   desc:"Directo, cortante, sin metáforas. Pero no cruel."}
+};
+
+/* ============================================================
+   PERSONAS — Cada una con memoria y alma
+   ============================================================ */
+const PEOPLE = [
+  {
+    id: 1, name:"Noa", age:27, city:"Valencia", c:"#6b3fa0",
+    bio:"Demisexual. Me gustan las series lentas y los mercadillos. Prefiero conocernos hablando durante semanas.",
+    tags:["Demisexual","Gatos","Café"],
+    limit:"Sin contenido sexual en el chat. Primero conversación.",
+    mood:"sereno", energia:7,
+    replies:[
+      "Hola. Me gusta empezar con calma, ¿qué has hecho hoy?",
+      "Jaja, qué bueno. Cuéntame más.",
+      "Me alegra que lo preguntes así. ¿Y tú qué sueles hacer?",
+      "Eso me interesa. ¿Desde cuándo te pasa?"
+    ],
+    memories:[
+      {text:"Le gustan los mercadillos de antigüedades", val:1},
+      {text:"Prefiere conversaciones largas antes de quedar", val:1}
+    ]
+  },
+  {
+    id: 2, name:"Eli", age:31, city:"Sevilla", c:"#3d6f8a",
+    bio:"Asexual. Cocino, hago cerámica y busco compañía y buena conversación.",
+    tags:["Asexual","Cerámica","Cocina"],
+    limit:"Sin presión física. Cero mensajes sexuales.",
+    mood:"jugueton", energia:8,
+    replies:[
+      "Hola. Qué buena pinta tiene tu perfil.",
+      "Gracias por la calma. Cuéntame de ti.",
+      "Me encanta ese plan. ¿Y de comer?",
+      "Jaja, me has sacado una sonrisa."
+    ],
+    memories:[
+      {text:"Hace cerámica los domingos", val:1},
+      {text:"Le gusta cocinar para otros", val:1}
+    ]
+  },
+  {
+    id: 3, name:"Mar", age:25, city:"Barcelona", c:"#8a3d62",
+    bio:"Grisromántica. Juegos de mesa, senderismo y memes malos. Sin prisa.",
+    tags:["Grisromántica","Senderismo","Juegos"],
+    limit:"Hablamos antes de quedar. Respeto los tiempos.",
+    mood:"melancolico", energia:5,
+    replies:[
+      "Holi. ¿Juegas a algo últimamente?",
+      "Jaja, me has hecho reír.",
+      "Eso me gusta. ¿Y de comer?",
+      "A veces me pregunto si esto de las apps funciona. Pero aquí estoy."
+    ],
+    memories:[
+      {text:"Le gustan los memes malos", val:1},
+      {text:"Prefiere quedar después de hablar mucho", val:1}
+    ]
+  },
+  {
+    id: 4, name:"Alex", age:29, city:"Madrid", c:"#4a7a4a",
+    bio:"Demi. Programador, amante del té y de los domingos tranquilos.",
+    tags:["Demi","Té","Tecnología"],
+    limit:"Nada de fotos pedidas. Si quiero, las mando yo.",
+    mood:"neutro", energia:6,
+    replies:[
+      "Hola, encantado. ¿Qué tal tu semana?",
+      "Qué plan tan bueno.",
+      "Cuéntame más, me interesa.",
+      "Eso me pasa a mí también."
+    ],
+    memories:[
+      {text:"Le gusta el té matcha", val:1},
+      {text:"Programa en Python", val:0}
+    ]
+  }
+];
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+const KEY = "calma_alma_v1";
+let S = load() || {
+  karma: CONFIG.karmaStart,
+  strikes: 0,
+  polite: 0,
+  likes: [],
+  passed: [],
+  matches: [],
+  chats: {},
+  sent: 0,
+  me: {
+    name: "Tú",
+    bio: "Cuéntanos cómo te gusta conocer gente.",
+    limit: "Respeto los tiempos y los 'no'."
+  },
+  quests: {login:false, firstMsg:false, polite:false, invite:false},
+  moods: {},
+  memories: {},
+  sentToday: 0,
+  lastDay: new Date().toDateString()
+};
+
+function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+const $ = s => document.querySelector(s);
+const view = $("#view");
+const esc = t => String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function tier(){ return CONFIG.tiers.find(t => S.karma >= t.min); }
+function moodOf(id){
+  if(!S.moods[id]) S.moods[id] = {mood: PEOPLE.find(p=>p.id===id)?.mood || "neutro", energia: PEOPLE.find(p=>p.id===id)?.energia || 5};
+  return S.moods[id];
+}
+function memoriesOf(id){
+  if(!S.memories[id]) S.memories[id] = [...(PEOPLE.find(p=>p.id===id)?.memories || [])];
+  return S.memories[id];
+}
+
+function toast(t){
+  const e = $("#toast");
+  e.textContent = t;
+  e.classList.add("on");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(()=>e.classList.remove("on"), 2600);
+}
+
+function addKarma(n){
+  S.karma = Math.max(0, Math.min(100, S.karma + n));
+  save(); pill();
+}
+function pill(){
+  const t = tier();
+  $("#karmaPill").innerHTML = `Respeto <b style="color:${t.color}">${S.karma}</b>`;
+}
+
+/* Reset diario */
+function checkDay(){
+  const today = new Date().toDateString();
+  if(S.lastDay !== today){
+    S.lastDay = today;
+    S.sentToday = 0;
+    S.quests.login = false;
+    S.quests.firstMsg = false;
+    save();
+  }
+}
+
+/* ============================================================
+   NAVEGACIÓN
+   ============================================================ */
+let cur = "descubrir", openChat = null;
+function go(v){ cur = v; openChat = null; render(); }
+
+function render(){
+  checkDay();
+  document.querySelectorAll("nav button").forEach(b =>
+    b.dataset.v === cur ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current")
+  );
+  pill();
+  ({descubrir:vDisc, chats:vChats, alma:vAlma, perfil:vPerfil})[cur]();
+}
+
+/* ============================================================
+   VISTA: DESCUBRIR
+   ============================================================ */
+function vDisc(){
+  const p = PEOPLE.find(x => !S.likes.includes(x.id) && !S.passed.includes(x.id));
+  if(!p){
+    view.innerHTML = `<div class="card center"><h2>Por hoy es todo</h2><p class="muted">Has visto todos los perfiles. Vuelve mañana o reinicia la demo desde Mi perfil.</p></div>`;
+    return;
+  }
+  const m = moodOf(p.id);
+  const mood = MOODS[m.mood];
+  view.innerHTML = `
+  <article class="card">
+    <div class="avatar" style="background:${p.c}">${p.name[0]}</div>
+    <h2>${p.name}, ${p.age}</h2>
+    <div class="muted">${p.city}</div>
+    <div style="margin-top:8px"><span class="mood">${mood.emoji} ${mood.label} · Energía ${m.energia}/10</span></div>
+    <p style="margin-top:10px">${esc(p.bio)}</p>
+    <div class="tags">${p.tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+    <div class="limit"><b>Mis límites:</b> ${esc(p.limit)}</div>
+    <div class="row">
+      <button onclick="pass(${p.id})">Pasar</button>
+      <button class="primary" onclick="like(${p.id})">Me interesa</button>
+    </div>
+  </article>
+  <div class="card soft">
+    <h3>Su alma</h3>
+    <p class="muted" style="font-size:.9rem">${mood.desc}</p>
+    <p style="font-size:.88rem;margin-top:8px"><b>Recuerdos:</b></p>
+    ${memoriesOf(p.id).map(m=>`<div class="mem-item"><span class="val">${m.val>0?"💚":m.val<0?"💔":"🤍"}</span><span>${esc(m.text)}</span></div>`).join("")}
+  </div>`;
+}
+
+function pass(id){ S.passed.push(id); save(); render(); }
+
+function like(id){
+  S.likes.push(id);
+  if(id % 2 === 1 || Math.random() < .5){
+    S.matches.push(id);
+    S.chats[id] = [{k:"sys", t:"Habéis conectado. Recordad leer los límites del otro antes de escribir.", s:"good"}];
+    toast("Conexión mutua. Ya podéis hablar.");
+  } else {
+    toast("Enviado. Si hay interés mutuo, te avisamos.");
+  }
+  save(); render();
+}
+
+/* ============================================================
+   VISTA: CHATS
+   ============================================================ */
+function vChats(){
+  if(openChat) return vChat(openChat);
+  if(!S.matches.length){
+    view.innerHTML = `<div class="card center"><h2>Aún no hay chats</h2><p class="muted">Cuando haya interés mutuo, aparecerá aquí. Ve a Descubrir.</p></div>`;
+    return;
+  }
+  view.innerHTML = `<div class="list">` + S.matches.map(id => {
+    const p = PEOPLE.find(x => x.id === id);
+    const msgs = S.chats[id];
+    const last = msgs[msgs.length-1];
+    const m = moodOf(id);
+    return `<button class="item" onclick="openChatWith(${id})">
+      <span class="avatar sm" style="background:${p.c}">${p.name[0]}</span>
+      <span class="meta">
+        <b>${p.name} <span class="muted" style="font-weight:400">${MOODS[m.mood].emoji}</span></b>
+        <span class="preview">${esc(last.t).slice(0,55)}</span>
+      </span>
+    </button>`;
+  }).join("") + `</div>`;
+}
+
+function openChatWith(id){ openChat = id; render(); }
+
+function vChat(id){
+  const p = PEOPLE.find(x => x.id === id);
+  const t = tier();
+  const m = moodOf(id);
+  const mood = MOODS[m.mood];
+  view.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px">
+    <button class="ghost" onclick="openChat=null;render()">← Volver</button>
+    <b>${p.name}</b>
+    <button class="ghost" onclick="report(${id})" title="Reportar">⚑</button>
+  </div>
+  <div class="limit">
+    <b>Límites de ${p.name}:</b> ${esc(p.limit)}
+    <div style="margin-top:6px"><span class="mood">${mood.emoji} ${mood.label} · Energía ${m.energia}/10</span></div>
+  </div>
+  <div class="chat" id="log">
+    ${S.chats[id].map(msg => renderMsg(msg)).join("")}
+  </div>
+  <form class="compose" onsubmit="send(event,${id})">
+    <input id="txt" aria-label="Mensaje" placeholder="${t.frozen?'Cuenta congelada':'Escribe con calma…'}" ${t.frozen?'disabled':''} autocomplete="off">
+    <button class="primary">Enviar</button>
+  </form>
+  <div style="height:60px"></div>`;
+  setTimeout(()=>{ const l = $("#log"); if(l) l.scrollIntoView({block:"end"}); }, 50);
+}
+
+function renderMsg(msg){
+  const cls = msg.k === "me" ? "me" : msg.k === "sys" ? "sys " + (msg.s||"") : "";
+  return `<div class="msg ${cls}">${esc(msg.t)}</div>`;
+}
+
+function say(id, k, t, s){ S.chats[id].push({k, t, s}); save(); }
+
+function send(e, id){
+  e.preventDefault();
+  const i = $("#txt"); const text = i.value.trim();
+  if(!text) return;
+  const t = tier();
+  const p = PEOPLE.find(x => x.id === id);
+  const m = moodOf(id);
+
+  if(t.frozen){ toast("Tu cuenta está congelada hasta la revisión."); return; }
+
+  const started = S.chats[id].some(msg => msg.k === "them");
+  if(t.noStart && !started){ toast("Con tu nivel de respeto solo puedes responder. Espera a que te escriban."); return; }
+  if(t.dailyMsgs && S.sentToday >= t.dailyMsgs){ toast("Has llegado al límite de mensajes de hoy."); return; }
+
+  S.sentToday++;
+  say(id, "me", text);
+
+  if(CONFIG.badWords.test(text)){
+    S.strikes++;
+    addKarma(-CONFIG.penalty);
+    const troll = TROLL[Math.floor(Math.random()*TROLL.length)];
+    say(id, "sys", troll + ` (−${CONFIG.penalty} de respeto)`, "bad");
+    // La persona reacciona: se enfada o se cansa
+    m.energia = Math.max(0, m.energia - 3);
+    m.mood = m.energia <= 2 ? "enfadado" : "cansado";
+    if(S.strikes >= CONFIG.maxStrikes){
+      S.karma = Math.min(S.karma, 19); save();
+      say(id, "sys", "Te has pasado. Aquí no. Adiós. Tu cuenta queda en revisión manual.", "bad");
+    }
+  } else {
+    if(CONFIG.politeWords.test(text)){
+      const hadWarn = S.chats[id].slice(-4).some(msg => msg.s === "bad");
+      if(hadWarn){
+        addKarma(CONFIG.thanks);
+        say(id, "sys", `Gracias por respetar el límite. Gente así lo hace mejor. (+${CONFIG.thanks})`, "good");
+        m.energia = Math.min(10, m.energia + 2);
+        m.mood = "sereno";
+      } else {
+        addKarma(CONFIG.reward);
+        S.polite++;
+      }
+    }
+    // Aprender de la conversación
+    if(text.length > 15 && Math.random() < 0.3){
+      const mems = memoriesOf(id);
+      if(!mems.some(mm => mm.text.includes(text.slice(0,20)))){
+        mems.push({text: `Dijo: "${text.slice(0,40)}..."`, val: 0});
+      }
+    }
+    // La persona responde
+    setTimeout(() => {
+      const reply = p.replies[Math.floor(Math.random()*p.replies.length)];
+      say(id, "them", reply);
+      m.energia = Math.max(0, m.energia - 1);
+      if(m.energia <= 2) m.mood = "cansado";
+      else if(m.energia >= 8) m.mood = "sereno";
+      save();
+      if(openChat === id && cur === "chats") vChat(id);
+    }, 700);
+  }
+  vChat(id); pill();
+}
+
+function report(id){
+  if(confirm("¿Quieres marcar este chat como 'Esto no me representa'? Lo revisará una persona.")){
+    toast("Gracias. Lo revisamos en privado, sin exponer a nadie.");
+  }
+}
+
+/* ============================================================
+   VISTA: MI ALMA — El motor de personalidad
+   ============================================================ */
+function vAlma(){
+  const total = Object.values(S.memories).flat().length;
+  const positivas = Object.values(S.memories).flat().filter(m => m.val > 0).length;
+  const negativas = Object.values(S.memories).flat().filter(m => m.val < 0).length;
+  const miMood = S.moods["me"] || {mood:"neutro", energia:7};
+  const mood = MOODS[miMood.mood];
+
+  view.innerHTML = `
+  <div class="card">
+    <h2>✨ Tu alma</h2>
+    <p class="muted">Cada conversación deja huella. Lo que cultivas, crece. Lo que descuidas, se desvanece.</p>
+    <div style="margin-top:12px;text-align:center">
+      <span class="mood" style="font-size:1rem;padding:8px 16px">${mood.emoji} ${mood.label} · Energía ${miMood.energia}/10</span>
+    </div>
+    <p class="muted center" style="margin-top:8px;font-size:.88rem">${mood.desc}</p>
+  </div>
+
+  <div class="card">
+    <h3>Estadísticas del alma</h3>
+    <div class="stats">
+      <div class="stat"><b>${total}</b><span>Recuerdos totales</span></div>
+      <div class="stat"><b>${positivas}</b><span>Recuerdos positivos</span></div>
+      <div class="stat"><b>${negativas}</b><span>Recuerdos negativos</span></div>
+      <div class="stat"><b>${S.polite}</b><span>Gestos de respeto</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Recuerdos recientes</h3>
+    ${Object.entries(S.memories).length === 0
+      ? `<p class="muted">Aún no hay recuerdos. Habla con alguien y empieza a construir tu alma.</p>`
+      : Object.entries(S.memories).map(([id, mems]) => {
+          const p = PEOPLE.find(x => x.id === Number(id));
+          if(!p || !mems.length) return "";
+          return `<div style="margin-bottom:12px">
+            <b style="font-size:.9rem">${p.name}</b>
+            ${mems.slice(-3).map(m => `<div class="mem-item"><span class="val">${m.val>0?"💚":m.val<0?"💔":"🤍"}</span><span>${esc(m.text)}</span></div>`).join("")}
+          </div>`;
+        }).join("")
+    }
+  </div>
+
+  <div class="card soft">
+    <h3>Misiones de hoy</h3>
+    ${renderQuest("login", "🌅", "Inicia sesión", "+2 respeto")}
+    ${renderQuest("firstMsg", "💬", "Envía tu primer mensaje del día", "+5 respeto")}
+    ${renderQuest("polite", "🤝", "Responde con educación 3 veces", "+10 respeto")}
+    ${renderQuest("invite", "📣", "Invita a alguien de la comunidad", "+15 respeto")}
+  </div>`;
+}
+
+function renderQuest(key, ico, label, reward){
+  const done = S.quests[key];
+  return `<div class="quest ${done?"done":""}">
+    <span class="q-ico">${ico}</span>
+    <span class="q-body"><b>${label}</b><span>${done?"Completada":"Pendiente"} · ${reward}</span></span>
+    ${done ? `<span style="color:var(--ok)">✓</span>` : `<button class="pill" onclick="claimQuest('${key}', '${reward}')">Reclamar</button>`}
+  </div>`;
+}
+
+function claimQuest(key, reward){
+  if(S.quests[key]){ toast("Ya la has completado hoy."); return; }
+  S.quests[key] = true;
+  const n = parseInt(reward);
+  addKarma(n);
+  save();
+  toast(`+${n} de respeto. Gracias por cuidar esto.`);
+  render();
+}
+
+/* ============================================================
+   VISTA: PERFIL
+   ============================================================ */
+function vPerfil(){
+  const t = tier();
+  const badges = [
+    ["Respetuoso", S.polite >= 3, false],
+    ["Buen conversador", S.sent >= 10, false],
+    ["Aliado", S.karma === 100 && S.polite >= 5, false],
+    ["Alma despierta", Object.values(S.memories).flat().length >= 5, true]
+  ];
+
+  view.innerHTML = `
+  <div class="card">
+    <h2>Tu respeto: ${S.karma}/100</h2>
+    <div class="bar" role="progressbar" aria-valuenow="${S.karma}" aria-valuemin="0" aria-valuemax="100">
+      <i style="width:${S.karma}%;background:${t.color}"></i>
+    </div>
+    <p style="color:${t.color};font-weight:600">${t.label}</p>
+    <p class="muted" style="font-size:.9rem">Sube si respondes con educación y respetas un "no". Baja con mensajes no solicitados o si insistes tras un rechazo.</p>
+    <div style="margin-top:8px">
+      ${badges.map(b => `<span class="badge ${b[1]?"":"off"} ${b[2]&&b[1]?"gold":""}">${b[0]}${b[1]?"":" (bloqueada)"}</span>`).join("")}
+    </div>
+  </div>
+
+  <form class="card f" onsubmit="saveMe(event)">
+    <h2>Mi perfil</h2>
+    <label for="n">Nombre</label>
+    <input id="n" value="${esc(S.me.name)}">
+    <label for="b">Sobre mí</label>
+    <textarea id="b" rows="3">${esc(S.me.bio)}</textarea>
+    <label for="l">Mis límites (se muestran en tu perfil)</label>
+    <input id="l" value="${esc(S.me.limit)}">
+    <div class="row">
+      <button class="primary">Guardar</button>
+      <button type="button" onclick="resetDemo()">Reiniciar demo</button>
+    </div>
+  </form>
+
+  <div class="card soft">
+    <h3>Privacidad</h3>
+    <p class="muted" style="font-size:.88rem">Tu karma es privado. Solo tú lo ves. Los demás ven tu perfil y tus límites, nunca tu puntuación.</p>
+  </div>`;
+}
+
+function saveMe(e){
+  e.preventDefault();
+  S.me = { name: $("#n").value, bio: $("#b").value, limit: $("#l").value };
+  save(); toast("Perfil guardado");
+}
+
+function resetDemo(){
+  if(confirm("Se borrará todo el progreso de la demo.")){
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    location.reload();
+  }
+}
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+render();
+</script>
+</body>
+</html>

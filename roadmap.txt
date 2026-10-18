@@ -1,0 +1,21 @@
+1Estructura del proyecto + esquema de base de datos + RLSCimientos sólidos y seguros
+2Auth (registro/login) + perfiles básicosUsuario puede entrar y editar su perfil
+3Sistema de karma + detección de contenido (backend)El “alma” vive en el servidor
+4Descubrir + match + chat básicoFlujo principal de la app
+5Estados emocionales + recuerdos (“Mi alma”)La magia del prototipo
+6Pulido, misiones, reportes y deployMVP listo para probar
+
+----------------------------------------------------
+
+calma/
+├── src/
+│   ├── components/Layout.tsx      ← navegación + header con karma
+│   ├── lib/supabase.ts            ← cliente de Supabase
+│   ├── types/database.ts          ← tipos + MOODS + KARMA_TIERS
+│   ├── styles/global.css          ← mismos colores y diseño del prototipo
+│   ├── App.tsx + main.tsx
+├── supabase/migrations/
+│   └── 001_initial_schema.sql     ← ⭐ lo más importante
+├── .env.example
+├── package.json, vite, tsconfig…
+└── README.md

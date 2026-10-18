@@ -1,0 +1,25 @@
+calma/
+├── src/
+│   ├── components/
+│   │   ├── Layout.tsx          ← actualizar (mostrar karma real)
+│   │   └── ProtectedRoute.tsx  ← NUEVO
+│   ├── pages/                  ← NUEVO (todo esto)
+│   │   ├── Login.tsx
+│   │   ├── Register.tsx
+│   │   ├── Discover.tsx        ← placeholder
+│   │   ├── Chats.tsx           ← placeholder
+│   │   ├── Soul.tsx            ← placeholder
+│   │   └── Profile.tsx
+│   ├── context/
+│   │   └── AuthContext.tsx     ← NUEVO
+│   ├── lib/
+│   │   ├── supabase.ts         ← ya existe
+│   │   └── api.ts              ← NUEVO (funciones de datos)
+│   ├── types/
+│   │   └── database.ts         ← ya existe
+│   ├── styles/
+│   │   └── global.css          ← ya existe
+│   ├── App.tsx                 ← actualizar (rutas)
+│   └── main.tsx                ← ya existe
+├── .env                        ← tu archivo con las claves
+└── package.json
