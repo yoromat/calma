@@ -12,6 +12,8 @@ export type Profile = {
   mood: string;
   energia: number;
   created_at: string;
+  age: number | null;      // <-- añadido
+  city: string | null;     // <-- añadido
 };
 
 export const KARMA_TIERS = [

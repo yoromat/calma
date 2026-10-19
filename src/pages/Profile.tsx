@@ -1,6 +1,6 @@
 // src/pages/Profile.tsx
 import { useEffect, useState } from 'react';
-import { getMyProfile, updateMyProfile, testKarma } from '../lib/api';
+import { getMyProfile, updateMyProfile } from '../lib/api';
 import type { Profile } from '../types/database';
 import { KARMA_TIERS } from '../types/database';
 
@@ -13,10 +13,6 @@ export function Profile() {
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [limitText, setLimitText] = useState('');
-
-  const [testMsg, setTestMsg] = useState('');
-  const [testResult, setTestResult] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     getMyProfile().then((p) => {
@@ -47,37 +43,6 @@ export function Profile() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
-  };
-
-  const handleTest = async () => {
-    if (!testMsg.trim()) return;
-    setTesting(true);
-    setTestResult(null);
-
-    const result = await testKarma(testMsg);
-
-    if (!result) {
-      setTestResult('❌ Error: no se pudo ejecutar el test. Revisa la consola.');
-      setTesting(false);
-      return;
-    }
-
-    const sign = result.delta > 0 ? '+' : '';
-    const icon = result.delta < 0 ? '🔻' : result.delta > 0 ? '🔺' : '➖';
-    setTestResult(
-      `${icon} Karma: ${result.karma_after} (delta: ${sign}${result.delta})${result.flagged ? ' · marcado como inapropiado' : ''}`
-    );
-
-    // Actualizar perfil local
-    setProfile((prev) => prev ? { ...prev, karma_score: result.karma_after } : prev);
-
-    // ⭐ Emitir evento global para que el header se entere
-    window.dispatchEvent(
-      new CustomEvent('karma-updated', { detail: { karma: result.karma_after } })
-    );
-
-    setTesting(false);
-    setTestMsg('');
   };
 
   if (loading) return <p className="muted">Cargando perfil…</p>;
@@ -130,33 +95,6 @@ export function Profile() {
           </button>
         </div>
       </form>
-
-      <div className="card soft">
-        <h3>🧪 Zona de pruebas</h3>
-        <p className="muted" style={{ fontSize: '0.88rem' }}>
-          Prueba el motor de karma del servidor. Escribe "gracias" (sube) o "foto" (baja).
-        </p>
-        <input
-          value={testMsg}
-          onChange={(e) => setTestMsg(e.target.value)}
-          placeholder="Escribe algo..."
-          style={{ marginTop: '8px' }}
-        />
-        <button
-          type="button"
-          className="primary"
-          onClick={handleTest}
-          disabled={testing || !testMsg.trim()}
-          style={{ marginTop: '8px', width: '100%' }}
-        >
-          {testing ? 'Probando…' : 'Probar karma'}
-        </button>
-        {testResult && (
-          <p style={{ marginTop: '10px', fontWeight: 600 }}>
-            {testResult}
-          </p>
-        )}
-      </div>
 
       <div className="card soft">
         <h3>Privacidad</h3>
