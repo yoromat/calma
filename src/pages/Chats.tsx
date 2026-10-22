@@ -1,16 +1,22 @@
 // src/pages/Chats.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getMyMatches, getMessagesWith, sendMessage } from '../lib/api';
 import type { Message } from '../lib/api';
 import type { Profile } from '../types/database';
+import { supabase } from '../lib/supabase';
 
 export function Chats() {
   const [matches, setMatches] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openMatch, setOpenMatch] = useState<Profile | null>(null);
+  const [openMatch, setOpenMatch] = useState<Profile | null>(() => {
+    // Recuperar el chat abierto de la sesión anterior
+    const saved = sessionStorage.getItem('calma_open_chat');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     getMyMatches().then((m) => {
@@ -19,10 +25,60 @@ export function Chats() {
     });
   }, []);
 
+  // Cargar mensajes cuando se abre un chat
+  useEffect(() => {
+    if (!openMatch) {
+      setMessages([]);
+      sessionStorage.removeItem('calma_open_chat');
+      return;
+    }
+
+    // Guardar el chat abierto en sesión
+    sessionStorage.setItem('calma_open_chat', JSON.stringify(openMatch));
+
+    // Cargar mensajes iniciales
+    getMessagesWith(openMatch.id).then(setMessages);
+
+    // ⭐ Suscripción en tiempo real a nuevos mensajes
+    const channel = supabase
+      .channel(`chat:${openMatch.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `or(and(sender_id.eq.${openMatch.id},receiver_id.eq.${(supabase as any).auth.currentUser?.id}),and(sender_id.eq.${(supabase as any).auth.currentUser?.id},receiver_id.eq.${openMatch.id}))`,
+        },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          setMessages((prev) => {
+            // Evitar duplicados
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    // Limpieza al salir del chat
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [openMatch?.id]);
+
   const openChat = async (p: Profile) => {
     setOpenMatch(p);
-    const msgs = await getMessagesWith(p.id);
-    setMessages(msgs);
+  };
+
+  const closeChat = () => {
+    setOpenMatch(null);
+    sessionStorage.removeItem('calma_open_chat');
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -38,9 +94,14 @@ export function Chats() {
       return;
     }
 
-    // Recargar mensajes
-    const msgs = await getMessagesWith(openMatch.id);
-    setMessages(msgs);
+    // El mensaje propio también se añade localmente (el realtime lo ignorará por duplicado)
+    if (result.message) {
+      setMessages((prev) => {
+        if (prev.some(m => m.id === result.message!.id)) return prev;
+        return [...prev, result.message!];
+      });
+    }
+
     setDraft('');
     setSending(false);
   };
@@ -51,7 +112,7 @@ export function Chats() {
     return (
       <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <button className="ghost" onClick={() => { setOpenMatch(null); setMessages([]); }}>
+          <button className="ghost" onClick={closeChat}>
             ← Volver
           </button>
           <b>{openMatch.username || 'Chat'}</b>
