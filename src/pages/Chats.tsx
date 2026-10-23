@@ -39,29 +39,37 @@ export function Chats() {
     // Cargar mensajes iniciales
     getMessagesWith(openMatch.id).then(setMessages);
 
-    // ⭐ Suscripción en tiempo real a nuevos mensajes
-    const channel = supabase
-      .channel(`chat:${openMatch.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `or(and(sender_id.eq.${openMatch.id},receiver_id.eq.${(supabase as any).auth.currentUser?.id}),and(sender_id.eq.${(supabase as any).auth.currentUser?.id},receiver_id.eq.${openMatch.id}))`,
-        },
-        (payload) => {
-          const newMsg = payload.new as Message;
+      // ⭐ Suscripción en tiempo real a nuevos mensajes (sin filtro complejo)
+  const channel = supabase
+    .channel(`chat:${openMatch.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        // Sin filtro: recibimos todos los INSERT y filtramos en cliente
+      },
+      (payload) => {
+        const newMsg = payload.new as Message;
+        const myId = (supabase as any).auth.currentUser?.id;
+        
+        // Filtrar en cliente: solo mensajes entre estos dos usuarios
+        const isRelevant =
+          (newMsg.sender_id === openMatch.id && newMsg.receiver_id === myId) ||
+          (newMsg.sender_id === myId && newMsg.receiver_id === openMatch.id);
+
+        if (isRelevant) {
           setMessages((prev) => {
-            // Evitar duplicados
             if (prev.some(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
         }
-      )
-      .subscribe();
-
-    channelRef.current = channel;
+      }
+    )
+    .subscribe((status) => {
+      console.log('Realtime status:', status);
+    });
 
     // Limpieza al salir del chat
     return () => {
