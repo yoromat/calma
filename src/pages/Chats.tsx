@@ -1,119 +1,360 @@
 // src/pages/Chats.tsx
-import { useEffect, useState, useRef } from 'react';
-import { getMyMatches, getMessagesWith, sendMessage } from '../lib/api';
+
+import { useEffect, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
+
+import {
+  getMyMatches,
+  getMessagesWith,
+  sendMessage,
+} from '../lib/api';
+
 import type { Message } from '../lib/api';
 import type { Profile } from '../types/database';
+
 import { supabase } from '../lib/supabase';
 
 export function Chats() {
   const [matches, setMatches] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [openMatch, setOpenMatch] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  const channelRef = useRef<any>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
 
-  // Cargar matches al montar
+  const [myId, setMyId] = useState<string | null>(null);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+
+  const channelRef = useRef<any>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<HTMLInputElement>(null);
+
+  // Identifica al usuario autenticado.
   useEffect(() => {
-    getMyMatches().then((m) => {
-      setMatches(m);
-      setLoading(false);
+    let cancelled = false;
+
+    async function loadUser() {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!cancelled) {
+          setMyId(data.user?.id ?? null);
+        }
+      } catch (error) {
+        console.error('Error obteniendo el usuario:', error);
+
+        if (!cancelled) {
+          setChatError('No se ha podido verificar tu sesión.');
+        }
+      }
+    }
+
+    loadUser();
+
+    // Si la sesión cambia, actualiza el usuario.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!cancelled) {
+        setMyId(session?.user?.id ?? null);
+      }
     });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Cargar mensajes y suscripción cuando se abre un chat
+  // Carga la lista de conversaciones.
   useEffect(() => {
-    if (!openMatch) {
+    let cancelled = false;
+
+    async function loadMatches() {
+      setLoading(true);
+
+      try {
+        const result = await getMyMatches();
+
+        if (!cancelled) {
+          setMatches(result ?? []);
+        }
+      } catch (error) {
+        console.error('Error cargando conversaciones:', error);
+
+        if (!cancelled) {
+          setChatError('No se han podido cargar tus conversaciones.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadMatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [myId]);
+
+  // Añade mensajes sin duplicarlos y los ordena cronológicamente.
+  function mergeMessages(
+    previous: Message[],
+    incoming: Message[]
+  ): Message[] {
+    const unique = new Map<string, Message>();
+
+    for (const message of previous) {
+      unique.set(String(message.id), message);
+    }
+
+    for (const message of incoming) {
+      unique.set(String(message.id), message);
+    }
+
+    return Array.from(unique.values()).sort((a, b) => {
+      const dateA = (a as any).created_at;
+      const dateB = (b as any).created_at;
+
+      if (!dateA || !dateB) {
+        return 0;
+      }
+
+      return (
+        new Date(dateA).getTime() -
+        new Date(dateB).getTime()
+      );
+    });
+  }
+
+  // Sincroniza los mensajes de la conversación actual.
+  useEffect(() => {
+    if (!openMatch || !myId) {
       setMessages([]);
+      setRealtimeConnected(false);
+      setChatLoading(false);
+
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        void supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+
       return;
     }
 
     let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    // Cargar mensajes iniciales
-    getMessagesWith(openMatch.id).then((msgs) => {
-      if (!cancelled) setMessages(msgs);
-    });
+    const matchId = openMatch.id;
 
-    // Suscripción en tiempo real (sin filtro complejo)
-    const channel = supabase
-      .channel(`chat:${openMatch.id}`)
+    setMessages([]);
+    setChatLoading(true);
+    setChatError('');
+    setRealtimeConnected(false);
+
+    // Carga los mensajes sin borrar los que ya hayan llegado
+    // por Realtime mientras se consultaba la base de datos.
+    async function syncMessages() {
+      try {
+        const result = await getMessagesWith(matchId);
+
+        if (cancelled) return;
+
+        setMessages((previous) =>
+          mergeMessages(previous, result ?? [])
+        );
+
+        setChatError('');
+      } catch (error) {
+        console.error('Error sincronizando mensajes:', error);
+
+        if (!cancelled) {
+          setChatError('No se han podido cargar los mensajes.');
+        }
+      } finally {
+        if (!cancelled) {
+          setChatLoading(false);
+        }
+      }
+    }
+
+    // Suscripción a los nuevos mensajes.
+    channel = supabase
+      .channel(`chat:${myId}:${matchId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
         (payload) => {
-          const newMsg = payload.new as Message;
-          const myId = (supabase as any).auth.currentUser?.id;
+          if (cancelled) return;
 
-          const isRelevant =
-            (newMsg.sender_id === openMatch.id && newMsg.receiver_id === myId) ||
-            (newMsg.sender_id === myId && newMsg.receiver_id === openMatch.id);
+          const newMessage = payload.new as Message;
 
-          if (isRelevant) {
-            setMessages((prev) => {
-              if (prev.some(m => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
-          }
+          // Solo acepta mensajes entre el usuario actual
+          // y la persona con la que está hablando.
+          const relevant =
+            (
+              newMessage.sender_id === myId &&
+              newMessage.receiver_id === matchId
+            ) ||
+            (
+              newMessage.sender_id === matchId &&
+              newMessage.receiver_id === myId
+            );
+
+          if (!relevant) return;
+
+          setMessages((previous) =>
+            mergeMessages(previous, [newMessage])
+          );
         }
       )
       .subscribe((status) => {
-        console.log('Realtime status:', status);
+        if (cancelled) return;
+
+        console.log('Estado del chat:', status);
+
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true);
+
+          // Recupera posibles mensajes perdidos al reconectar.
+          void syncMessages();
+        } else {
+          setRealtimeConnected(false);
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setChatError(
+            'Conexión inestable. Intentando recuperar el chat…'
+          );
+        }
       });
 
     channelRef.current = channel;
 
+    // Carga inicial, independientemente de Realtime.
+    void syncMessages();
+
     return () => {
       cancelled = true;
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
+
+      if (channel) {
+        if (channelRef.current === channel) {
+          channelRef.current = null;
+        }
+
+        void supabase.removeChannel(channel);
       }
     };
-  }, [openMatch?.id]);
+  }, [openMatch?.id, myId]);
 
-  const handleSend = async (e: React.FormEvent) => {
+  // Desplaza la conversación hasta el último mensaje.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+    });
+  }, [messages]);
+
+  // Envía mensajes y gestiona posibles errores.
+  async function handleSend(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!openMatch || !draft.trim()) return;
+
+    if (!openMatch || !myId || sending) return;
+
+    const content = draft.trim();
+
+    if (!content) return;
+
     setSending(true);
+    setChatError('');
 
-    const result = await sendMessage(openMatch.id, draft.trim());
+    try {
+      const result = await sendMessage(openMatch.id, content);
 
-    if (result.error) {
-      alert('Error al enviar: ' + result.error);
-      setSending(false);
-      return;
-    }
+      if (result.error) {
+        setChatError(`No se pudo enviar el mensaje: ${result.error}`);
+        return;
+      }
 
-    if (result.message) {
-      setMessages((prev) => {
-        if (prev.some(m => m.id === result.message!.id)) return prev;
-        return [...prev, result.message!];
+      // Si sendMessage devuelve el mensaje insertado,
+      // lo añade inmediatamente sin esperar a Realtime.
+      if (result.message) {
+        setMessages((previous) =>
+          mergeMessages(previous, [result.message!])
+        );
+      }
+
+      setDraft('');
+
+      requestAnimationFrame(() => {
+        draftRef.current?.focus();
       });
+    } catch (error) {
+      console.error('Error enviando mensaje:', error);
+
+      setChatError(
+        'No se ha podido enviar el mensaje. Comprueba tu conexión.'
+      );
+    } finally {
+      setSending(false);
     }
+  }
 
-    setDraft('');
-    setSending(false);
-  };
-
-  const closeChat = () => {
+  function closeChat() {
     setOpenMatch(null);
-  };
+    setMessages([]);
+    setDraft('');
+    setChatError('');
+  }
 
-  if (loading) return <p className="muted">Cargando chats…</p>;
+  if (loading) {
+    return <p className="muted">Cargando chats…</p>;
+  }
 
-  // Vista de chat abierto
+  // Conversación abierta.
   if (openMatch) {
     return (
       <>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <button className="ghost" onClick={closeChat}>← Volver</button>
-          <b>{openMatch.username || 'Chat'}</b>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '10px',
+            gap: '10px',
+          }}
+        >
+          <button className="ghost" onClick={closeChat}>
+            ← Volver
+          </button>
+
+          <div style={{ textAlign: 'center' }}>
+            <b>{openMatch.username || 'Chat'}</b>
+
+            <div
+              className="muted"
+              style={{ fontSize: '12px', marginTop: '3px' }}
+            >
+              {realtimeConnected
+                ? '● En línea'
+                : '○ Conectando…'}
+            </div>
+          </div>
+
           <span style={{ width: '40px' }} />
         </div>
 
@@ -124,49 +365,96 @@ export function Chats() {
         )}
 
         <div className="chat">
-          {messages.length === 0 && (
-            <p className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+          {chatLoading && messages.length === 0 && (
+            <p
+              className="muted"
+              style={{ textAlign: 'center', padding: '20px' }}
+            >
+              Cargando mensajes…
+            </p>
+          )}
+
+          {!chatLoading && messages.length === 0 && !chatError && (
+            <p
+              className="muted"
+              style={{ textAlign: 'center', padding: '20px' }}
+            >
               Aún no hay mensajes. Rompe el hielo con calma.
             </p>
           )}
+
           {messages.map((m) => {
-            const isMe = m.sender_id !== openMatch.id;
+            const isMe = m.sender_id === myId;
+
             return (
-              <div key={m.id} className={`msg ${isMe ? 'me' : ''}`}>
+              <div
+                key={m.id}
+                className={`msg ${isMe ? 'me' : ''}`}
+              >
                 {m.content}
+
                 {m.karma_delta !== 0 && (
                   <span className="val">
-                    {m.karma_delta > 0 ? '🔺' : '🔻'} {m.karma_delta > 0 ? '+' : ''}{m.karma_delta}
+                    {m.karma_delta > 0 ? '🔺' : '🔻'}{' '}
+                    {m.karma_delta > 0 ? '+' : ''}
+                    {m.karma_delta}
                   </span>
                 )}
               </div>
             );
           })}
+
+          <div ref={bottomRef} />
         </div>
+
+        {chatError && (
+          <div
+            role="alert"
+            style={{
+              padding: '8px 10px',
+              color: '#c0392b',
+              fontSize: '13px',
+            }}
+          >
+            {chatError}
+          </div>
+        )}
 
         <form className="compose" onSubmit={handleSend}>
           <input
+            ref={draftRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Escribe con calma…"
-            disabled={sending}
+            placeholder="Escribe un mensaje…"
+            disabled={sending || !myId}
             autoComplete="off"
+            aria-label="Escribir mensaje"
           />
-          <button className="primary" type="submit" disabled={sending || !draft.trim()}>
+
+          <button
+            className="primary"
+            type="submit"
+            disabled={sending || !draft.trim() || !myId}
+          >
             {sending ? '…' : 'Enviar'}
           </button>
         </form>
+
         <div style={{ height: '60px' }} />
       </>
     );
   }
 
-  // Vista de lista de matches
+  // Lista de conversaciones.
   if (matches.length === 0) {
     return (
       <div className="card">
         <h2>Aún no hay chats</h2>
-        <p className="muted">Cuando haya interés mutuo, aparecerá aquí. Ve a Descubrir para conocer gente.</p>
+
+        <p className="muted">
+          Cuando haya interés mutuo, aparecerá aquí.
+          Ve a Descubrir para conocer gente.
+        </p>
       </div>
     );
   }
@@ -174,13 +462,25 @@ export function Chats() {
   return (
     <div className="list">
       {matches.map((p) => (
-        <button key={p.id} className="item" onClick={() => setOpenMatch(p)}>
-          <span className="avatar sm" style={{ background: p.avatar_color || '#6b3fa0' }}>
+        <button
+          key={p.id}
+          className="item"
+          onClick={() => setOpenMatch(p)}
+        >
+          <span
+            className="avatar sm"
+            style={{
+              background: p.avatar_color || '#6b3fa0',
+            }}
+          >
             {(p.username || '?')[0].toUpperCase()}
           </span>
+
           <span className="meta">
             <b>{p.username || 'Anónimo'}</b>
-            <span className="preview">{p.bio || 'Sin bio'}</span>
+            <span className="preview">
+              {p.bio || 'Sin bio'}
+            </span>
           </span>
         </button>
       ))}
