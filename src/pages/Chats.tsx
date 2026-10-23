@@ -8,16 +8,13 @@ import { supabase } from '../lib/supabase';
 export function Chats() {
   const [matches, setMatches] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openMatch, setOpenMatch] = useState<Profile | null>(() => {
-    // Recuperar el chat abierto de la sesión anterior
-    const saved = sessionStorage.getItem('calma_open_chat');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [openMatch, setOpenMatch] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const channelRef = useRef<any>(null);
 
+  // Cargar matches al montar
   useEffect(() => {
     getMyMatches().then((m) => {
       setMatches(m);
@@ -25,69 +22,60 @@ export function Chats() {
     });
   }, []);
 
-  // Cargar mensajes cuando se abre un chat
+  // Cargar mensajes y suscripción cuando se abre un chat
   useEffect(() => {
     if (!openMatch) {
       setMessages([]);
-      sessionStorage.removeItem('calma_open_chat');
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
       return;
     }
 
-    // Guardar el chat abierto en sesión
-    sessionStorage.setItem('calma_open_chat', JSON.stringify(openMatch));
+    let cancelled = false;
 
     // Cargar mensajes iniciales
-    getMessagesWith(openMatch.id).then(setMessages);
-
-      // ⭐ Suscripción en tiempo real a nuevos mensajes (sin filtro complejo)
-  const channel = supabase
-    .channel(`chat:${openMatch.id}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        // Sin filtro: recibimos todos los INSERT y filtramos en cliente
-      },
-      (payload) => {
-        const newMsg = payload.new as Message;
-        const myId = (supabase as any).auth.currentUser?.id;
-        
-        // Filtrar en cliente: solo mensajes entre estos dos usuarios
-        const isRelevant =
-          (newMsg.sender_id === openMatch.id && newMsg.receiver_id === myId) ||
-          (newMsg.sender_id === myId && newMsg.receiver_id === openMatch.id);
-
-        if (isRelevant) {
-          setMessages((prev) => {
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-        }
-      }
-    )
-    .subscribe((status) => {
-      console.log('Realtime status:', status);
+    getMessagesWith(openMatch.id).then((msgs) => {
+      if (!cancelled) setMessages(msgs);
     });
 
-    // Limpieza al salir del chat
+    // Suscripción en tiempo real (sin filtro complejo)
+    const channel = supabase
+      .channel(`chat:${openMatch.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          const myId = (supabase as any).auth.currentUser?.id;
+
+          const isRelevant =
+            (newMsg.sender_id === openMatch.id && newMsg.receiver_id === myId) ||
+            (newMsg.sender_id === myId && newMsg.receiver_id === openMatch.id);
+
+          if (isRelevant) {
+            setMessages((prev) => {
+              if (prev.some(m => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime status:', status);
+      });
+
+    channelRef.current = channel;
+
     return () => {
+      cancelled = true;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
   }, [openMatch?.id]);
-
-  const openChat = async (p: Profile) => {
-    setOpenMatch(p);
-  };
-
-  const closeChat = () => {
-    setOpenMatch(null);
-    sessionStorage.removeItem('calma_open_chat');
-  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +90,6 @@ export function Chats() {
       return;
     }
 
-    // El mensaje propio también se añade localmente (el realtime lo ignorará por duplicado)
     if (result.message) {
       setMessages((prev) => {
         if (prev.some(m => m.id === result.message!.id)) return prev;
@@ -114,15 +101,18 @@ export function Chats() {
     setSending(false);
   };
 
+  const closeChat = () => {
+    setOpenMatch(null);
+  };
+
   if (loading) return <p className="muted">Cargando chats…</p>;
 
+  // Vista de chat abierto
   if (openMatch) {
     return (
       <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <button className="ghost" onClick={closeChat}>
-            ← Volver
-          </button>
+          <button className="ghost" onClick={closeChat}>← Volver</button>
           <b>{openMatch.username || 'Chat'}</b>
           <span style={{ width: '40px' }} />
         </div>
@@ -171,6 +161,7 @@ export function Chats() {
     );
   }
 
+  // Vista de lista de matches
   if (matches.length === 0) {
     return (
       <div className="card">
@@ -183,7 +174,7 @@ export function Chats() {
   return (
     <div className="list">
       {matches.map((p) => (
-        <button key={p.id} className="item" onClick={() => openChat(p)}>
+        <button key={p.id} className="item" onClick={() => setOpenMatch(p)}>
           <span className="avatar sm" style={{ background: p.avatar_color || '#6b3fa0' }}>
             {(p.username || '?')[0].toUpperCase()}
           </span>
