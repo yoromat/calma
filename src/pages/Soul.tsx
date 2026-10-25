@@ -28,20 +28,16 @@ export function Soul() {
     load();
   }, []);
 
-  const handleClaim = async (questId: string) => {
-    setClaiming(questId);
-    const result = await claimQuest(questId);
-    if (result.success) {
-      setProfile((prev) => prev ? { ...prev, karma_score: result.newKarma } : prev);
-      window.dispatchEvent(
-        new CustomEvent('karma-updated', { detail: { karma: result.newKarma } })
-      );
-      // Recargar misiones para que aparezcan como completadas
-      const q = await getQuestStatus();
-      setQuests(q);
-    }
-    setClaiming(null);
-  };
+const handleClaim = async (questId: string) => {
+  setClaiming(questId);
+  const result = await claimQuest(questId);
+  if (result.success) {
+    setProfile((prev) => prev ? { ...prev, karma_score: result.newKarma } : prev);
+    window.dispatchEvent(new CustomEvent('karma-updated', { detail: { karma: result.newKarma } }));
+  }
+  setQuests(await getQuestStatus());
+  setClaiming(null);
+};
 
   if (loading) return <p className="muted">Cargando tu alma…</p>;
   if (!profile) return <p className="muted">No se encontró tu perfil.</p>;

@@ -301,28 +301,4 @@ export async function claimQuest(questId: string): Promise<{ newKarma: number; s
   };
 }
 
-  // Dar recompensa en karma
-  const rewards: Record<string, number> = {
-    login: 2,
-    firstMsg: 5,
-    polite: 10,
-  };
 
-  const reward = rewards[questId] ?? 0;
-  if (reward > 0) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('karma_score')
-      .eq('id', user.id)
-      .single();
-
-    if (profile) {
-      await supabase
-        .from('profiles')
-        .update({ karma_score: Math.min(100, (profile.karma_score ?? 0) + reward) })
-        .eq('id', user.id);
-    }
-  }
-
-  return true;
-}
