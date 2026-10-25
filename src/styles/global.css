@@ -177,4 +177,3 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .mem-item{display:flex;gap:8px;align-items:flex-start;padding:8px;background:var(--soft);border-radius:10px;margin-bottom:6px;font-size:.88rem}
 .mem-item .val{font-size:1.1rem;flex-shrink:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-

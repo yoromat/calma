@@ -17,17 +17,16 @@ export function Chats() {
 
   const channelRef = useRef<any>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Obtener mi id al montar
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setMyId(data.user?.id ?? null);
     });
   }, []);
 
-  // Cargar matches
   useEffect(() => {
     getMyMatches().then((m) => {
       setMatches(m);
@@ -35,7 +34,6 @@ export function Chats() {
     });
   }, []);
 
-  // Cargar mensajes + suscripción realtime + typing
   useEffect(() => {
     if (!openMatch || !myId) return;
 
@@ -45,7 +43,6 @@ export function Chats() {
       if (!cancelled) setMessages(msgs);
     });
 
-    // Canal compartido: mismo nombre para ambos usuarios
     const channelName = `chat:${[myId, openMatch.id].sort().join(':')}`;
     const channel = supabase
       .channel(channelName)
@@ -100,6 +97,13 @@ export function Chats() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
+  // Mantener el foco en el input al abrir el chat
+  useEffect(() => {
+    if (openMatch && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [openMatch?.id]);
+
   const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setDraft(value);
@@ -141,6 +145,8 @@ export function Chats() {
     if (result.error) {
       alert('Error al enviar: ' + result.error);
       setSending(false);
+      // Recuperar foco incluso en error
+      setTimeout(() => inputRef.current?.focus(), 50);
       return;
     }
 
@@ -154,7 +160,9 @@ export function Chats() {
     setDraft('');
     setSending(false);
 
-    // Avisar de que hemos dejado de escribir
+    // ⭐ Recuperar el foco después de enviar
+    setTimeout(() => inputRef.current?.focus(), 50);
+
     const c = channelRef.current;
     if (c && myId) {
       void c.send({
@@ -162,6 +170,16 @@ export function Chats() {
         event: 'typing',
         payload: { user_id: myId, is_typing: false },
       });
+    }
+  };
+
+  // ⭐ Manejar Enter para enviar sin perder el foco
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!sending && draft.trim()) {
+        handleSend(e as any);
+      }
     }
   };
 
@@ -218,10 +236,12 @@ export function Chats() {
 
         <form className="compose chat-compose" onSubmit={handleSend}>
           <input
+            ref={inputRef}
             value={draft}
             onChange={handleDraftChange}
+            onKeyDown={handleKeyDown}
             placeholder="Escribe con calma…"
-            disabled={sending}
+            // ⭐ Ya no deshabilitamos el input mientras se envía
             autoComplete="off"
           />
           <button className="primary" type="submit" disabled={sending || !draft.trim()}>
