@@ -11,7 +11,6 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Cargar karma al montar y cuando cambia la ruta
   useEffect(() => {
     let cancelled = false;
     getMyProfile().then((p) => {
@@ -20,7 +19,6 @@ export function Layout() {
     return () => { cancelled = true; };
   }, [location.pathname]);
 
-  // Escuchar evento global de cambio de karma
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ karma: number }>).detail;
@@ -58,16 +56,17 @@ export function Layout() {
         </div>
       </header>
 
-      <main>
-        <Outlet />
-      </main>
-
-      <nav aria-label="Secciones">
+      {/* Barra de navegación arriba, debajo del header */}
+      <nav className="top-nav" aria-label="Secciones">
         <NavItem to="/descubrir" icon="🔍" label="Descubrir" />
         <NavItem to="/chats" icon="💬" label="Chats" />
         <NavItem to="/alma" icon="✨" label="Mi alma" />
         <NavItem to="/perfil" icon="👤" label="Perfil" />
       </nav>
+
+      <main>
+        <Outlet />
+      </main>
     </div>
   );
 }
@@ -76,26 +75,10 @@ function NavItem({ to, icon, label }: { to: string; icon: string; label: string 
   return (
     <NavLink
       to={to}
-      style={({ isActive }) => ({
-        flex: 1,
-        border: 0,
-        borderRadius: 0,
-        background: 'none',
-        color: isActive ? 'var(--acc)' : 'var(--mute)',
-        minHeight: '58px',
-        fontSize: '0.8rem',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '2px',
-        textDecoration: 'none',
-        fontWeight: isActive ? 800 : 400,
-        boxShadow: isActive ? 'inset 0 3px 0 var(--acc)' : 'none',
-      })}
+      className={({ isActive }) => `top-nav-item ${isActive ? 'active' : ''}`}
     >
-      <span style={{ fontSize: '1.2rem' }}>{icon}</span>
-      {label}
+      <span style={{ fontSize: '1rem' }}>{icon}</span>
+      <span>{label}</span>
     </NavLink>
   );
 }

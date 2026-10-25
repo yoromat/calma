@@ -102,3 +102,55 @@ input,textarea,select{width:100%;font:inherit;padding:10px 12px;border-radius:10
   min-width: 44px;
   padding: 0 14px;
 }
+/* Barra de navegación superior */
+.top-nav {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 60px; /* debajo del header */
+  z-index: 9;
+}
+
+.top-nav-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 4px;
+  text-decoration: none;
+  color: var(--mute);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.top-nav-item.active {
+  color: var(--acc);
+  font-weight: 800;
+  border-bottom-color: var(--acc);
+}
+
+.top-nav-item:hover {
+  color: var(--acc);
+}
+
+/* Ajustar el main para que no quede tapado */
+main {
+  padding-top: 8px;
+}
+
+/* Ajustar el chat para que el compose no tape la nav superior */
+.chat-screen {
+  height: calc(100dvh - 120px);
+}
+
+.chat-screen .chat-compose {
+  bottom: 0;
+  left: 0;
+  transform: none;
+  max-width: 100%;
+  border-radius: 0;
+}
