@@ -282,24 +282,24 @@ export async function getQuestStatus(): Promise<{
   };
 }
 
-export async function claimQuest(questId: string): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-
-  const today = new Date().toISOString().split('T')[0];
-
-  const { error } = await supabase
-    .from('quests')
-    .insert({
-      user_id: user.id,
-      quest_id: questId,
-      day: today,
-    });
+export async function claimQuest(questId: string): Promise<{ newKarma: number; success: boolean }> {
+  const { data, error } = await supabase.rpc('claim_quest', {
+    p_quest_id: questId,
+  });
 
   if (error) {
     console.error('Error reclamando misión:', error);
-    return false;
+    return { newKarma: 0, success: false };
   }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return { newKarma: 0, success: false };
+
+  return {
+    newKarma: row.new_karma ?? 0,
+    success: row.success ?? false,
+  };
+}
 
   // Dar recompensa en karma
   const rewards: Record<string, number> = {

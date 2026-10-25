@@ -30,11 +30,15 @@ export function Soul() {
 
   const handleClaim = async (questId: string) => {
     setClaiming(questId);
-    const ok = await claimQuest(questId);
-    if (ok) {
-      // Recargar todo para ver el karma actualizado
-      await load();
-      window.dispatchEvent(new CustomEvent('karma-updated', { detail: { karma: profile?.karma_score ?? 100 } }));
+    const result = await claimQuest(questId);
+    if (result.success) {
+      setProfile((prev) => prev ? { ...prev, karma_score: result.newKarma } : prev);
+      window.dispatchEvent(
+        new CustomEvent('karma-updated', { detail: { karma: result.newKarma } })
+      );
+      // Recargar misiones para que aparezcan como completadas
+      const q = await getQuestStatus();
+      setQuests(q);
     }
     setClaiming(null);
   };
