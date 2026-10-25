@@ -88,10 +88,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .chat-screen {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 130px);
+  height: calc(100dvh - 130px); /* Ajusta según la altura real del header + barra superior */
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
+
 .chat-header {
   flex: 0 0 auto;
   display: flex;
@@ -101,30 +103,23 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   padding: 8px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
+  z-index: 2;
 }
-.chat-user {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.chat-status {
-  font-size: 12px;
-  color: var(--mute);
-}
+
 .chat-screen .chat-messages {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 12px;
-  padding-bottom: 20px;
+  padding-bottom: 80px; /* Espacio extra para que el último mensaje no quede tapado */
 }
+
 .chat-screen .chat-compose {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 0;
+  bottom: 0; /* Fijo abajo */
   width: 100%;
   max-width: 520px;
   z-index: 100;
@@ -136,6 +131,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   border-top: 1px solid var(--line);
   box-sizing: border-box;
 }
+
 .chat-screen .chat-compose input {
   flex: 1;
   min-width: 0;
@@ -146,12 +142,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   background: var(--bg);
   color: var(--ink);
 }
+
 .chat-screen .chat-compose button {
   min-width: 44px;
   padding: 0 14px;
-}
-.chat-screen .chat-messages {
-  scroll-padding-bottom: 80px;
 }
 
 /* Formularios */
@@ -183,3 +177,4 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .mem-item{display:flex;gap:8px;align-items:flex-start;padding:8px;background:var(--soft);border-radius:10px;margin-bottom:6px;font-size:.88rem}
 .mem-item .val{font-size:1.1rem;flex-shrink:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
