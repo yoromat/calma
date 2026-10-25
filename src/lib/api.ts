@@ -51,7 +51,6 @@ export async function getDiscoverProfiles(): Promise<Profile[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // Perfiles que no he likeado ni pasado
   const { data: likes } = await supabase
     .from('likes')
     .select('to_user_id')
@@ -109,7 +108,6 @@ export async function likeUser(toUserId: string): Promise<{ matched: boolean }> 
     return { matched: false };
   }
 
-  // Comprobar si hay match (el trigger lo crea, pero lo verificamos)
   const { data: match } = await supabase
     .from('matches')
     .select('id')
@@ -198,7 +196,6 @@ export async function sendMessage(
     return { message: null, karmaAfter: null, error: error.message };
   }
 
-  // Leer el karma actualizado (el trigger lo modificó)
   const { data: profile } = await supabase
     .from('profiles')
     .select('karma_score, strikes')
@@ -210,4 +207,122 @@ export async function sendMessage(
     karmaAfter: profile?.karma_score ?? null,
     error: null,
   };
+}
+
+// ============================================================
+// ALMA: RECUERDOS Y MISIONES
+// ============================================================
+
+export type Memory = {
+  id: string;
+  user_id: string;
+  about_user_id: string;
+  text: string;
+  valence: number;
+  is_nucleo: boolean;
+  created_at: string;
+};
+
+export async function getMyMemories(): Promise<Memory[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('memories')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error('Error cargando recuerdos:', error);
+    return [];
+  }
+  return (data || []) as Memory[];
+}
+
+export async function getQuestStatus(): Promise<{
+  login: boolean;
+  firstMsg: boolean;
+  polite: boolean;
+}> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { login: false, firstMsg: false, polite: false };
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // Login: si se ha registrado actividad hoy
+  const { data: loginQuest } = await supabase
+    .from('quests')
+    .select('completed_at')
+    .eq('user_id', user.id)
+    .eq('quest_id', 'login')
+    .eq('day', today)
+    .maybeSingle();
+
+  // Primer mensaje: si ha enviado un mensaje hoy
+  const { count: msgCount } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('sender_id', user.id)
+    .gte('created_at', `${today}T00:00:00`);
+
+  // Educado: si ha enviado 3 mensajes con palabras respetuosas hoy
+  const { count: politeCount } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('sender_id', user.id)
+    .eq('karma_delta', 3)
+    .gte('created_at', `${today}T00:00:00`);
+
+  return {
+    login: !!loginQuest,
+    firstMsg: (msgCount ?? 0) > 0,
+    polite: (politeCount ?? 0) >= 3,
+  };
+}
+
+export async function claimQuest(questId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const { error } = await supabase
+    .from('quests')
+    .insert({
+      user_id: user.id,
+      quest_id: questId,
+      day: today,
+    });
+
+  if (error) {
+    console.error('Error reclamando misión:', error);
+    return false;
+  }
+
+  // Dar recompensa en karma
+  const rewards: Record<string, number> = {
+    login: 2,
+    firstMsg: 5,
+    polite: 10,
+  };
+
+  const reward = rewards[questId] ?? 0;
+  if (reward > 0) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('karma_score')
+      .eq('id', user.id)
+      .single();
+
+    if (profile) {
+      await supabase
+        .from('profiles')
+        .update({ karma_score: Math.min(100, (profile.karma_score ?? 0) + reward) })
+        .eq('id', user.id);
+    }
+  }
+
+  return true;
 }
