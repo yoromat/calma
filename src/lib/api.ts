@@ -301,4 +301,111 @@ export async function claimQuest(questId: string): Promise<{ newKarma: number; s
   };
 }
 
+// ============================================================
+// SOLICITUDES DE CHAT
+// ============================================================
 
+export type Solicitud = {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  status: 'pendiente' | 'aceptada' | 'rechazada';
+  created_at: string;
+};
+
+export async function enviarSolicitudChat(toUserId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  // Comprobar si ya existe
+  const { data: existente } = await supabase
+    .from('solicitudes_chat')
+    .select('*')
+    .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${user.id})`)
+    .maybeSingle();
+
+  if (existente) {
+    // Si ya existe y está pendiente o aceptada, no hacer nada
+    return true;
+  }
+
+  const { error } = await supabase
+    .from('solicitudes_chat')
+    .insert({ from_user_id: user.id, to_user_id: toUserId, status: 'pendiente' });
+
+  if (error) {
+    console.error('Error enviando solicitud:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function getSolicitudesPendientes(): Promise<(Solicitud & { perfil: Profile })[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('solicitudes_chat')
+    .select('*')
+    .eq('to_user_id', user.id)
+    .eq('status', 'pendiente');
+
+  if (error || !data) return [];
+
+  const fromIds = data.map(s => s.from_user_id);
+  if (fromIds.length === 0) return [];
+
+  const { data: perfiles } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', fromIds);
+
+  const perfilMap = new Map((perfiles || []).map(p => [p.id, p as Profile]));
+
+  return data
+    .filter(s => perfilMap.has(s.from_user_id))
+    .map(s => ({ ...s, perfil: perfilMap.get(s.from_user_id)! }));
+}
+
+export async function responderSolicitud(solicitudId: string, aceptar: boolean): Promise<boolean> {
+  const { error } = await supabase
+    .from('solicitudes_chat')
+    .update({ status: aceptar ? 'aceptada' : 'rechazada' })
+    .eq('id', solicitudId);
+
+  if (error) {
+    console.error('Error respondiendo solicitud:', error);
+    return false;
+  }
+
+  // Si se acepta, crear match (el trigger check_mutual_like no aplica aquí, así que lo hacemos manual)
+  if (aceptar) {
+    const { data: sol } = await supabase
+      .from('solicitudes_chat')
+      .select('*')
+      .eq('id', solicitudId)
+      .single();
+
+    if (sol) {
+      const u1 = sol.from_user_id < sol.to_user_id ? sol.from_user_id : sol.to_user_id;
+      const u2 = sol.from_user_id < sol.to_user_id ? sol.to_user_id : sol.from_user_id;
+
+      await supabase.from('matches').insert({ user1_id: u1, user2_id: u2 }).select();
+    }
+  }
+
+  return true;
+}
+
+export async function hayMatchCon(userId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data } = await supabase
+    .from('matches')
+    .select('id')
+    .or(`and(user1_id.eq.${user.id},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${user.id})`)
+    .maybeSingle();
+
+  return !!data;
+}

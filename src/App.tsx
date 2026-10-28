@@ -9,6 +9,7 @@ import { Discover } from './pages/Discover';
 import { Chats } from './pages/Chats';
 import { Soul } from './pages/Soul';
 import { Profile } from './pages/Profile';
+import { Taberna } from './pages/Taberna';
 import './styles/global.css';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/chats" element={<Chats />} />
             <Route path="/alma" element={<Soul />} />
             <Route path="/perfil" element={<Profile />} />
+            <Route path="/taberna" element={<Taberna />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/descubrir" replace />} />

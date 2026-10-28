@@ -1,12 +1,22 @@
 // src/pages/Chats.tsx
 import { useEffect, useState, useRef } from 'react';
-import { getMyMatches, getMessagesWith, sendMessage } from '../lib/api';
-import type { Message } from '../lib/api';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  getMyMatches,
+  getMessagesWith,
+  sendMessage,
+  getSolicitudesPendientes,
+  responderSolicitud,
+} from '../lib/api';
+import type { Message, Solicitud } from '../lib/api';
 import type { Profile } from '../types/database';
 import { supabase } from '../lib/supabase';
 
+type SolicitudConPerfil = Solicitud & { perfil: Profile };
+
 export function Chats() {
   const [matches, setMatches] = useState<Profile[]>([]);
+  const [solicitudes, setSolicitudes] = useState<SolicitudConPerfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [openMatch, setOpenMatch] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -21,6 +31,16 @@ export function Chats() {
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const loadAll = async () => {
+    const [m, s] = await Promise.all([getMyMatches(), getSolicitudesPendientes()]);
+    setMatches(m);
+    setSolicitudes(s);
+    setLoading(false);
+  };
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setMyId(data.user?.id ?? null);
@@ -28,15 +48,20 @@ export function Chats() {
   }, []);
 
   useEffect(() => {
-    getMyMatches().then((m) => {
-      setMatches(m);
-      setLoading(false);
-    });
+    loadAll();
   }, []);
 
   useEffect(() => {
-    if (!openMatch || !myId) return;
+    const state = location.state as { openWith?: string } | null;
+    if (state?.openWith && matches.length > 0) {
+      const target = matches.find(m => m.id === state.openWith);
+      if (target) setOpenMatch(target);
+      navigate(location.pathname, { replace: true });
+    }
+  }, [matches, location.state]);
 
+  useEffect(() => {
+    if (!openMatch || !myId) return;
     let cancelled = false;
 
     getMessagesWith(openMatch.id).then((msgs) => {
@@ -66,9 +91,7 @@ export function Chats() {
         if (cancelled) return;
         const data = payload.payload as { user_id?: string; is_typing?: boolean };
         if (data.user_id !== openMatch.id) return;
-
         setOtherTyping(Boolean(data.is_typing));
-
         if (stopTypingTimerRef.current) clearTimeout(stopTypingTimerRef.current);
         if (data.is_typing) {
           stopTypingTimerRef.current = setTimeout(() => {
@@ -92,12 +115,10 @@ export function Chats() {
     };
   }, [openMatch?.id, myId]);
 
-  // Auto-scroll al último mensaje
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Mantener el foco en el input al abrir el chat
   useEffect(() => {
     if (openMatch && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -145,7 +166,6 @@ export function Chats() {
     if (result.error) {
       alert('Error al enviar: ' + result.error);
       setSending(false);
-      // Recuperar foco incluso en error
       setTimeout(() => inputRef.current?.focus(), 50);
       return;
     }
@@ -159,8 +179,6 @@ export function Chats() {
 
     setDraft('');
     setSending(false);
-
-    // ⭐ Recuperar el foco después de enviar
     setTimeout(() => inputRef.current?.focus(), 50);
 
     const c = channelRef.current;
@@ -173,12 +191,19 @@ export function Chats() {
     }
   };
 
-  // ⭐ Manejar Enter para enviar sin perder el foco
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!sending && draft.trim()) {
-        handleSend(e as any);
+      if (!sending && draft.trim()) handleSend(e as any);
+    }
+  };
+
+  const handleResponderSolicitud = async (solicitud: SolicitudConPerfil, aceptar: boolean) => {
+    const ok = await responderSolicitud(solicitud.id, aceptar);
+    if (ok) {
+      setSolicitudes(prev => prev.filter(s => s.id !== solicitud.id));
+      if (aceptar) {
+        await loadAll();
       }
     }
   };
@@ -191,7 +216,6 @@ export function Chats() {
 
   if (loading) return <p className="muted">Cargando chats…</p>;
 
-  // ====== Vista de chat abierto ======
   if (openMatch) {
     return (
       <div className="chat-screen">
@@ -241,7 +265,6 @@ export function Chats() {
             onChange={handleDraftChange}
             onKeyDown={handleKeyDown}
             placeholder="Escribe con calma…"
-            // ⭐ Ya no deshabilitamos el input mientras se envía
             autoComplete="off"
           />
           <button className="primary" type="submit" disabled={sending || !draft.trim()}>
@@ -252,29 +275,46 @@ export function Chats() {
     );
   }
 
-  // ====== Vista de lista de matches ======
-  if (matches.length === 0) {
-    return (
-      <div className="card">
-        <h2>Aún no hay chats</h2>
-        <p className="muted">Cuando haya interés mutuo, aparecerá aquí. Ve a Descubrir para conocer gente.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="list">
-      {matches.map((p) => (
-        <button key={p.id} className="item" onClick={() => setOpenMatch(p)}>
-          <span className="avatar sm" style={{ background: p.avatar_color || '#6b3fa0' }}>
-            {(p.username || '?')[0].toUpperCase()}
-          </span>
-          <span className="meta">
-            <b>{p.username || 'Anónimo'}</b>
-            <span className="preview">{p.bio || 'Sin bio'}</span>
-          </span>
-        </button>
-      ))}
-    </div>
+    <>
+      {solicitudes.length > 0 && (
+        <div className="card">
+          <h3>Solicitudes de chat</h3>
+          {solicitudes.map((s) => (
+            <div key={s.id} className="item" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
+              <span className="avatar sm" style={{ background: s.perfil.avatar_color || '#6b3fa0' }}>
+                {(s.perfil.username || '?')[0].toUpperCase()}
+              </span>
+              <div style={{ flex: 1 }}>
+                <b>{s.perfil.username || 'Anónimo'}</b> quiere hablar contigo.
+              </div>
+              <button className="primary" onClick={() => handleResponderSolicitud(s, true)}>Aceptar</button>
+              <button className="ghost" onClick={() => handleResponderSolicitud(s, false)}>Rechazar</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {matches.length === 0 ? (
+        <div className="card">
+          <h2>Aún no hay chats</h2>
+          <p className="muted">Cuando haya interés mutuo, aparecerá aquí. Ve a Descubrir o a la Taberna para conocer gente.</p>
+        </div>
+      ) : (
+        <div className="list">
+          {matches.map((p) => (
+            <button key={p.id} className="item" onClick={() => setOpenMatch(p)}>
+              <span className="avatar sm" style={{ background: p.avatar_color || '#6b3fa0' }}>
+                {(p.username || '?')[0].toUpperCase()}
+              </span>
+              <span className="meta">
+                <b>{p.username || 'Anónimo'}</b>
+                <span className="preview">{p.bio || 'Sin bio'}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

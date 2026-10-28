@@ -5,6 +5,27 @@ import type { Profile } from '../types/database';
 import type { Memory } from '../lib/api';
 import { MOODS } from '../types/database';
 
+// Función de scoring triple (relevancia + recencia + importancia)
+function scoreMemory(memory: Memory, currentMood: string): number {
+  // Relevancia: 1 si el recuerdo es sobre alguien con quien has hablado recientemente, 0 si no
+  // Como no tenemos esa info fácil, usamos 0.5 base
+  const relevancia = 0.5;
+
+  // Recencia: decaimiento exponencial, vida media 7 días
+  const dias = (Date.now() - new Date(memory.created_at).getTime()) / (1000 * 60 * 60 * 24);
+  const recencia = Math.exp(-dias / 7);
+
+  // Importancia: valor absoluto de la valencia / 2
+  const importancia = Math.abs(memory.valence) / 2;
+
+  // Bonus por mood: si el mood coincide con la valencia del recuerdo
+  let moodBonus = 0;
+  if (currentMood === 'melancolico' && memory.valence < 0) moodBonus = 0.2;
+  if (currentMood === 'sereno' && memory.valence > 0) moodBonus = 0.2;
+
+  return 0.4 * relevancia + 0.3 * recencia + 0.3 * importancia + moodBonus;
+}
+
 export function Soul() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -28,21 +49,37 @@ export function Soul() {
     load();
   }, []);
 
-const handleClaim = async (questId: string) => {
-  setClaiming(questId);
-  const result = await claimQuest(questId);
-  if (result.success) {
-    setProfile((prev) => prev ? { ...prev, karma_score: result.newKarma } : prev);
-    window.dispatchEvent(new CustomEvent('karma-updated', { detail: { karma: result.newKarma } }));
-  }
-  setQuests(await getQuestStatus());
-  setClaiming(null);
-};
+  const handleClaim = async (questId: string) => {
+    setClaiming(questId);
+    const result = await claimQuest(questId);
+    if (result.success) {
+      setProfile((prev) => prev ? { ...prev, karma_score: result.newKarma } : prev);
+      window.dispatchEvent(
+        new CustomEvent('karma-updated', { detail: { karma: result.newKarma } })
+      );
+      const q = await getQuestStatus();
+      setQuests(q);
+    }
+    setClaiming(null);
+  };
 
   if (loading) return <p className="muted">Cargando tu alma…</p>;
   if (!profile) return <p className="muted">No se encontró tu perfil.</p>;
 
   const mood = MOODS[profile.mood as keyof typeof MOODS] || MOODS.neutro;
+
+  // Separar núcleos de recuerdos normales
+  const nucleos = memories.filter(m => m.is_nucleo);
+  const noNucleos = memories.filter(m => !m.is_nucleo);
+
+  // Scoring triple para los no-núcleos
+  const scored = noNucleos
+    .map(m => ({ memory: m, score: scoreMemory(m, profile.mood) }))
+    .sort((a, b) => b.score - a.score);
+
+  // Top 6 recuerdos más relevantes (excluyendo núcleos que ya se muestran aparte)
+  const topMemories = scored.slice(0, 6).map(s => s.memory);
+
   const positivas = memories.filter(m => m.valence > 0).length;
   const negativas = memories.filter(m => m.valence < 0).length;
 
@@ -62,7 +99,7 @@ const handleClaim = async (questId: string) => {
             {mood.emoji} {mood.label} · Energía {profile.energia ?? 7}/10
           </span>
         </div>
-        <p className="muted center" style={{ marginTop: '8px', fontSize: '0.88rem', textAlign: 'center' }}>
+        <p className="muted" style={{ marginTop: '8px', fontSize: '0.88rem', textAlign: 'center' }}>
           {mood.desc}
         </p>
       </div>
@@ -73,16 +110,38 @@ const handleClaim = async (questId: string) => {
           <div className="stat"><b>{memories.length}</b><span>Recuerdos totales</span></div>
           <div className="stat"><b>{positivas}</b><span>Recuerdos positivos</span></div>
           <div className="stat"><b>{negativas}</b><span>Recuerdos negativos</span></div>
-          <div className="stat"><b>{profile.polite_count ?? 0}</b><span>Gestos de respeto</span></div>
+          <div className="stat"><b>{nucleos.length}</b><span>Núcleos</span></div>
         </div>
       </div>
 
+      {/* Núcleos: siempre visibles */}
+      {nucleos.length > 0 && (
+        <div className="card">
+          <h3>Recuerdos núcleo</h3>
+          <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '8px' }}>
+            Lo que define quién eres. Nunca se olvida.
+          </p>
+          {nucleos.map((m) => (
+            <div key={m.id} className="mem-item">
+              <span className="val">
+                {m.valence > 0 ? '💚' : m.valence < 0 ? '💔' : '🤍'}
+              </span>
+              <span>{m.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Top 6 recuerdos por scoring triple */}
       <div className="card">
-        <h3>Recuerdos recientes</h3>
-        {memories.length === 0 ? (
-          <p className="muted">Aún no hay recuerdos. Habla con alguien y empieza a construir tu alma.</p>
+        <h3>Recuerdos que te definen</h3>
+        <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '8px' }}>
+          Los 6 más relevantes según tu estado actual.
+        </p>
+        {topMemories.length === 0 ? (
+          <p className="muted">Aún no hay recuerdos suficientes. Habla con alguien y empieza a construir tu alma.</p>
         ) : (
-          memories.slice(0, 10).map((m) => (
+          topMemories.map((m) => (
             <div key={m.id} className="mem-item">
               <span className="val">
                 {m.valence > 0 ? '💚' : m.valence < 0 ? '💔' : '🤍'}

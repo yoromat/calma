@@ -56,11 +56,11 @@ export function Layout() {
         </div>
       </header>
 
-      {/* Barra de navegación SUPERIOR, debajo del header */}
       <nav className="top-nav" aria-label="Secciones">
         <NavItem to="/descubrir" icon="🔍" label="Descubrir" />
         <NavItem to="/chats" icon="💬" label="Chats" />
         <NavItem to="/alma" icon="✨" label="Mi alma" />
+        <NavItem to="/taberna" icon="🍻" label="Taberna" />
         <NavItem to="/perfil" icon="👤" label="Perfil" />
       </nav>
 
