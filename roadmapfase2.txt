@@ -23,3 +23,13 @@ calma/
 │   └── main.tsx                ← ya existe
 ├── .env                        ← tu archivo con las claves
 └── package.json
+
+Opción 1 (buzón de moderación). Es la base para que la comunidad se sienta segura. Sin esto, los reportes no tienen cauce.
+
+Opción 3 (rechazar matches). Es rápido y da control al usuario.
+
+Opción 2 (límite por IP). Antes de abrirlo a los 3.000 del canal.
+
+Opción 4 (vigilantes). Cuando el buzón ya funcione.
+
+Opción 5 (pulir taberna). Al final, cuando la funcionalidad esté completa.

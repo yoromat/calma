@@ -409,3 +409,112 @@ export async function hayMatchCon(userId: string): Promise<boolean> {
 
   return !!data;
 }
+// ============================================================
+// BUZÓN DE MODERACIÓN
+// ============================================================
+
+export type MensajeBuzon = {
+  id: string;
+  from_user_id: string;
+  asunto: string;
+  mensaje: string;
+  respuesta: string | null;
+  status: 'pendiente' | 'leido' | 'respondido';
+  created_at: string;
+};
+
+export async function enviarAlBuzon(asunto: string, mensaje: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from('buzon')
+    .insert({ from_user_id: user.id, asunto, mensaje });
+
+  if (error) {
+    console.error('Error enviando al buzón:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function getMisMensajesBuzon(): Promise<MensajeBuzon[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('buzon')
+    .select('*')
+    .eq('from_user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error cargando buzón:', error);
+    return [];
+  }
+  return (data || []) as MensajeBuzon[];
+}
+
+// ⭐ Solo para admins
+export async function esAdmin(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .eq('role', 'admin')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error comprobando admin:', error);
+    return false;
+  }
+  return !!data;
+}
+
+// ⭐ Solo para admins: ver todos los mensajes
+export async function getTodosLosMensajesBuzon(): Promise<(MensajeBuzon & { perfil: Profile })[]> {
+  const { data, error } = await supabase
+    .from('buzon')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  const fromIds = [...new Set(data.map(m => m.from_user_id))];
+  if (fromIds.length === 0) return [];
+
+  const { data: perfiles } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', fromIds);
+
+  const perfilMap = new Map((perfiles || []).map(p => [p.id, p as Profile]));
+
+  return data
+    .filter(m => perfilMap.has(m.from_user_id))
+    .map(m => ({ ...m, perfil: perfilMap.get(m.from_user_id)! }));
+}
+
+export async function responderMensajeBuzon(mensajeId: string, respuesta: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from('buzon')
+    .update({
+      respuesta,
+      respondido_por: user.id,
+      status: 'respondido',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', mensajeId);
+
+  if (error) {
+    console.error('Error respondiendo:', error);
+    return false;
+  }
+  return true;
+}

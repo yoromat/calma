@@ -62,6 +62,8 @@ export function Layout() {
         <NavItem to="/alma" icon="✨" label="Mi alma" />
         <NavItem to="/taberna" icon="🍻" label="Taberna" />
         <NavItem to="/perfil" icon="👤" label="Perfil" />
+        <NavItem to="/buzon" icon="📬" label="Buzón" />
+        <NavItem to="/admin/buzon" icon="🛡️" label="Admin" />
       </nav>
 
       <main>

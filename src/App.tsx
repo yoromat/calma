@@ -11,6 +11,8 @@ import { Soul } from './pages/Soul';
 import { Profile } from './pages/Profile';
 import { Taberna } from './pages/Taberna';
 import './styles/global.css';
+import { Buzon } from './pages/Buzon';
+import { AdminBuzon } from './pages/AdminBuzon';
 
 export default function App() {
   return (
@@ -32,6 +34,8 @@ export default function App() {
             <Route path="/alma" element={<Soul />} />
             <Route path="/perfil" element={<Profile />} />
             <Route path="/taberna" element={<Taberna />} />
+            <Route path="/buzon" element={<Buzon />} />
+            <Route path="/admin/buzon" element={<AdminBuzon />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/descubrir" replace />} />
