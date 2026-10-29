@@ -207,6 +207,30 @@ export function Chats() {
       }
     }
   };
+  // ⭐ Auto-refresco de solicitudes
+  useEffect(() => {
+    if (!myId) return;
+
+    const channel = supabase
+      .channel(`solicitudes-${myId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'solicitudes_chat',
+          filter: `to_user_id=eq.${myId}`,
+        },
+        () => {
+          getSolicitudesPendientes().then(setSolicitudes);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [myId]);
 
   const closeChat = () => {
     setOpenMatch(null);

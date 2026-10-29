@@ -1,8 +1,9 @@
 // src/pages/AdminBuzon.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { esAdmin, getTodosLosMensajesBuzon, responderMensajeBuzon } from '../lib/api';
 import type { MensajeBuzon } from '../lib/api';
 import type { Profile } from '../types/database';
+import { supabase } from '../lib/supabase';
 
 type MensajeConPerfil = MensajeBuzon & { perfil: Profile };
 
@@ -11,6 +12,7 @@ export function AdminBuzon() {
   const [mensajes, setMensajes] = useState<MensajeConPerfil[]>([]);
   const [respuestas, setRespuestas] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const channelRef = useRef<any>(null);
 
   const load = async () => {
     const admin = await esAdmin();
@@ -22,15 +24,43 @@ export function AdminBuzon() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
+
+  // ⭐ Auto-refresco cuando llega un mensaje nuevo o se responde
+  useEffect(() => {
+    if (!esAdminUser) return;
+
+    const channel = supabase
+      .channel('admin-buzon-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'buzon' },
+        () => {
+          // Recargar la lista completa cuando hay cualquier cambio
+          getTodosLosMensajesBuzon().then(setMensajes);
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [esAdminUser]);
 
   const handleResponder = async (id: string) => {
     const texto = respuestas[id];
     if (!texto?.trim()) return;
     const ok = await responderMensajeBuzon(id, texto.trim());
     if (ok) {
-      await load();
       setRespuestas(prev => ({ ...prev, [id]: '' }));
+      // La recarga la hará el realtime automáticamente
     }
   };
 
@@ -40,7 +70,7 @@ export function AdminBuzon() {
   return (
     <div className="card">
       <h2>🛡️ Buzón de administración</h2>
-      <p className="muted">Solo los administradores pueden ver esto.</p>
+      <p className="muted">Solo los administradores pueden ver esto. Se actualiza solo.</p>
       {mensajes.length === 0 ? (
         <p className="muted">No hay mensajes en el buzón.</p>
       ) : (

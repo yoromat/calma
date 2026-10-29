@@ -1,7 +1,8 @@
 // src/pages/Buzon.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { enviarAlBuzon, getMisMensajesBuzon } from '../lib/api';
 import type { MensajeBuzon } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 export function Buzon() {
   const [mensajes, setMensajes] = useState<MensajeBuzon[]>([]);
@@ -10,6 +11,8 @@ export function Buzon() {
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const channelRef = useRef<any>(null);
+  const [myId, setMyId] = useState<string | null>(null);
 
   const load = async () => {
     const m = await getMisMensajesBuzon();
@@ -17,7 +20,42 @@ export function Buzon() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setMyId(data.user?.id ?? null);
+    });
+    load();
+  }, []);
+
+  // ⭐ Auto-refresco cuando el admin responde
+  useEffect(() => {
+    if (!myId) return;
+
+    const channel = supabase
+      .channel(`buzon-user-${myId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'buzon',
+          filter: `from_user_id=eq.${myId}`,
+        },
+        () => {
+          getMisMensajesBuzon().then(setMensajes);
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [myId]);
 
   const handleEnviar = async (e: React.FormEvent) => {
     e.preventDefault();
