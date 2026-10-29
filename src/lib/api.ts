@@ -128,7 +128,8 @@ export async function getMyMatches(): Promise<Profile[]> {
   const { data, error } = await supabase
     .from('matches')
     .select('user1_id, user2_id')
-    .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+    .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+    .eq('status', 'activo');  // ⭐ Solo matches activos
 
   if (error || !data) return [];
 
@@ -514,6 +515,29 @@ export async function responderMensajeBuzon(mensajeId: string, respuesta: string
 
   if (error) {
     console.error('Error respondiendo:', error);
+    return false;
+  }
+  return true;
+}
+// ============================================================
+// RECHAZAR MATCH
+// ============================================================
+
+export async function rechazarMatch(otherUserId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const u1 = user.id < otherUserId ? user.id : otherUserId;
+  const u2 = user.id < otherUserId ? otherUserId : user.id;
+
+  const { error } = await supabase
+    .from('matches')
+    .update({ status: 'rechazado' })
+    .eq('user1_id', u1)
+    .eq('user2_id', u2);
+
+  if (error) {
+    console.error('Error rechazando match:', error);
     return false;
   }
   return true;

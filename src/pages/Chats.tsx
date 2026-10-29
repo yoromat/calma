@@ -7,6 +7,7 @@ import {
   sendMessage,
   getSolicitudesPendientes,
   responderSolicitud,
+  rechazarMatch,
 } from '../lib/api';
 import type { Message, Solicitud } from '../lib/api';
 import type { Profile } from '../types/database';
@@ -125,6 +126,31 @@ export function Chats() {
     }
   }, [openMatch?.id]);
 
+  // Auto-refresco de solicitudes
+  useEffect(() => {
+    if (!myId) return;
+
+    const channel = supabase
+      .channel(`solicitudes-${myId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'solicitudes_chat',
+          filter: `to_user_id=eq.${myId}`,
+        },
+        () => {
+          getSolicitudesPendientes().then(setSolicitudes);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [myId]);
+
   const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setDraft(value);
@@ -207,30 +233,22 @@ export function Chats() {
       }
     }
   };
-  // ⭐ Auto-refresco de solicitudes
-  useEffect(() => {
-    if (!myId) return;
 
-    const channel = supabase
-      .channel(`solicitudes-${myId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'solicitudes_chat',
-          filter: `to_user_id=eq.${myId}`,
-        },
-        () => {
-          getSolicitudesPendientes().then(setSolicitudes);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [myId]);
+  // ⭐ Rechazar match (fuera del return, en su sitio)
+  const handleRechazarMatch = async (match: Profile) => {
+    if (!confirm(`¿Rechazar el match con ${match.username || 'esta persona'}? La conversación desaparecerá para ambos.`)) {
+      return;
+    }
+    const ok = await rechazarMatch(match.id);
+    if (ok) {
+      setOpenMatch(null);
+      setMessages([]);
+      const m = await getMyMatches();
+      setMatches(m);
+    } else {
+      alert('No se pudo rechazar el match. Inténtalo de nuevo.');
+    }
+  };
 
   const closeChat = () => {
     setOpenMatch(null);
@@ -251,7 +269,14 @@ export function Chats() {
               {otherTyping ? '✍️ Está escribiendo…' : '● Conectado'}
             </span>
           </div>
-          <span style={{ width: '40px' }} />
+          <button
+            className="ghost"
+            onClick={() => handleRechazarMatch(openMatch)}
+            title="Rechazar match"
+            style={{ fontSize: '0.75rem', color: 'var(--bad)' }}
+          >
+            Rechazar
+          </button>
         </header>
 
         {openMatch.limit_text && (
